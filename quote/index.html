@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>寻章摘句</title>
+  <style>
+    :root {
+      --bg: #faf9f7;
+      --text: #2c2c2c;
+      --muted: #888;
+      --card: #ffffff;
+      --border: #e8e5e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+      line-height: 1.9;
+      padding: 4rem 1.5rem 6rem;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-bottom: 3rem;
+      text-transform: uppercase;
+    }
+    .quote-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.8rem 1.6rem;
+      margin-bottom: 1.2rem;
+      transition: box-shadow 0.2s ease;
+    }
+    .quote-card:hover {
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+    }
+    .quote-text {
+      font-size: 1.05rem;
+      margin-bottom: 0.8rem;
+    }
+    .quote-author {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: right;
+    }
+    .quote-author::before { content: "—— "; }
+    .empty, .error {
+      text-align: center;
+      color: var(--muted);
+      padding: 3rem 0;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>摘抄</h1>
+  <div id="app"></div>
+
+  <script>
+    const app = document.getElementById('app');
+
+    fetch('./quote.json')
+      .then(r => {
+        if (!r.ok) throw new Error('fetch failed');
+        return r.json();
+      })
+      .then(quotes => {
+        if (!quotes.length) {
+          app.innerHTML = '<p class="empty">还没有摘抄。</p>';
+          return;
+        }
+        app.innerHTML = quotes.map(q => `
+          <figure class="quote-card">
+            <blockquote class="quote-text">${escapeHTML(q.text)}</blockquote>
+            <figcaption class="quote-author">${escapeHTML(q.author || '')}</figcaption>
+          </figure>
+        `).join('');
+      })
+      .catch(() => {
+        app.innerHTML = '<p class="error">摘抄加载失败，请稍后再试。</p>';
+      });
+
+    function escapeHTML(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

@@ -24,6 +24,7 @@
     --muted: #6b6b6e;
     --line: #e2e2de;
     --btn-bg: #ffffff;
+    --trail-rgb: 16, 185, 129;
     color-scheme: light;
   }
 
@@ -33,6 +34,7 @@
     --muted: #96969a;
     --line: #26262a;
     --btn-bg: #161618;
+    --trail-rgb: 110, 231, 183;
     color-scheme: dark;
   }
 
@@ -43,11 +45,24 @@
       --muted: #96969a;
       --line: #26262a;
       --btn-bg: #161618;
+      --trail-rgb: 110, 231, 183;
       color-scheme: dark;
     }
   }
 
   * { box-sizing: border-box; }
+
+  /* 光标拖尾层：铺满视口，只负责显示，不接管任何指针事件 */
+  #cursor-trail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    display: block;
+    pointer-events: none;
+  }
 
   body {
     margin: 0;
@@ -62,6 +77,11 @@
           "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     -webkit-font-smoothing: antialiased;
     transition: background-color .35s ease, color .35s ease;
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
   }
 
   main p {
@@ -95,13 +115,36 @@
   .theme-toggle:hover { color: var(--fg); border-color: var(--muted); }
   .theme-toggle:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 
+  .guide-link {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    padding: 7px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--muted);
+    background: var(--btn-bg);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    text-decoration: none;
+    transition: color .2s, border-color .2s, background-color .35s ease;
+  }
+
+  .guide-link:hover { color: var(--fg); border-color: var(--muted); }
+  .guide-link:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
   @media (prefers-reduced-motion: reduce) {
     body { transition: none; }
     main p { animation: none; }
+    #cursor-trail { display: none; }
   }
 </style>
 </head>
 <body>
+
+<canvas id="cursor-trail" aria-hidden="true"></canvas>
+
+<a class="guide-link" href="quote/index.html" aria-label="前往摘抄页面">摘抄</a>
 
 <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切换颜色主题">自动</button>
 
@@ -131,6 +174,312 @@
       var next = modes[(modes.indexOf(root.dataset.theme) + 1) % modes.length];
       apply(next);
     });
+  })();
+</script>
+
+<script>
+  /* ------------------------------------------------------------------
+     光标拖尾（零依赖 Canvas 2D）
+     - 记录指针轨迹点，逐段按"年龄"衰减透明度与线宽
+     - 线宽随瞬时速度变化：快则细、慢则丰，形成丝带感
+     - 沿路径散落光点，构成彗尾碎屑
+     - 指针静止后不再追加新点，整条轨迹在 420ms 内淡出消失
+     - 支持 prefers-reduced-motion、页面隐藏暂停、DPR 自适应
+  ------------------------------------------------------------------ */
+  (function () {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    var canvas = document.getElementById('cursor-trail');
+    if (!canvas || !canvas.getContext) return;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    var CONFIG = {
+      life: 420,              /* 轨迹寿命（毫秒） */
+      maxPoints: 64,          /* 轨迹点上限 */
+      minStep: 2.5,           /* 相邻点最小间距，抑制抖动 */
+      jump: 120,              /* 超过该间距视为断点，不连线 */
+      widthMax: 5.4,          /* 最慢时的线宽 */
+      widthMin: 1.5,          /* 最快时的线宽 */
+      speedRef: 1500,         /* 线宽归一化的速度基准（px/s） */
+      alpha: 0.80,            /* 轨迹峰值透明度 */
+      glow: true,             /* 外层辉光 */
+      sparkEvery: 13,         /* 每移动多少像素散落一枚光点 */
+      sparkMax: 90,
+      sparkLife: [280, 620],
+      sparkSize: [0.8, 1.9],
+      sparkAlpha: 0.55
+    };
+
+    var rgb = '16, 185, 129';
+    var dark = false;
+
+    var pts = [];            /* { x, y, t, v } */
+    var sparks = [];         /* { x, y, vx, vy, age, life, r } */
+    var w = 0, h = 0, dpr = 1;
+    var running = false, rafId = 0, prevTime = 0, resizeRaf = 0;
+    var started = false, lastX = 0, lastY = 0, lastT = 0, sparkAcc = 0;
+
+    function rnd(a, b) { return a + Math.random() * (b - a); }
+
+    function readTheme() {
+      var root = getComputedStyle(document.documentElement);
+      var v = root.getPropertyValue('--trail-rgb').trim();
+      if (v) rgb = v;
+      var cs = (root.colorScheme || '').toLowerCase();
+      dark = cs.indexOf('dark') !== -1;
+    }
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      pts.length = 0;
+      sparks.length = 0;
+      started = false;
+    }
+
+    /* ---------- 轨迹与碎屑 ---------- */
+
+    function spawnSpark(x, y, v, ux, uy) {
+      if (sparks.length >= CONFIG.sparkMax) sparks.shift();
+      var side = Math.random() < 0.5 ? -1 : 1;
+      var off = rnd(2, 12) * side;
+      var sp = rnd(6, 26) * (1 + Math.min(v, 2200) / 3000);
+      sparks.push({
+        x: x - uy * off,
+        y: y + ux * off,
+        vx: -uy * side * sp + ux * rnd(-12, 12),
+        vy: ux * side * sp + uy * rnd(-12, 12),
+        age: 0,
+        life: rnd(CONFIG.sparkLife[0], CONFIG.sparkLife[1]),
+        r: rnd(CONFIG.sparkSize[0], CONFIG.sparkSize[1]) * (1 + Math.min(v, 1800) / 2400)
+      });
+    }
+
+    function onMove(e) {
+      var t = e.timeStamp || performance.now();
+      var x = e.clientX, y = e.clientY;
+
+      if (!started) {
+        started = true;
+        lastX = x; lastY = y; lastT = t;
+        return;
+      }
+
+      var dx = x - lastX, dy = y - lastY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < CONFIG.minStep) return;
+
+      var dt = Math.max(t - lastT, 8) / 1000;
+      var v = Math.min(dist / dt, 4000);
+
+      pts.push({ x: x, y: y, t: t, v: v });
+      if (pts.length > CONFIG.maxPoints) pts.shift();
+
+      if (dist < CONFIG.jump) {
+        sparkAcc += dist;
+        while (sparkAcc >= CONFIG.sparkEvery) {
+          sparkAcc -= CONFIG.sparkEvery;
+          spawnSpark(x, y, v, dx / dist, dy / dist);
+        }
+      } else {
+        sparkAcc = 0;
+      }
+
+      lastX = x; lastY = y; lastT = t;
+      ensureLoop();
+    }
+
+    function updateSparks(dt) {
+      var damp = Math.pow(0.12, dt);
+      for (var i = sparks.length - 1; i >= 0; i--) {
+        var s = sparks[i];
+        s.age += dt * 1000;
+        if (s.age >= s.life) { sparks.splice(i, 1); continue; }
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.vx *= damp;
+        s.vy *= damp;
+      }
+    }
+
+    function prune(now) {
+      var cut = now - CONFIG.life - 60;
+      while (pts.length && pts[0].t < cut) pts.shift();
+    }
+
+    /* ---------- 绘制 ---------- */
+
+    function strokeLayer(now, glow) {
+      var n = pts.length;
+      if (n < 2) return;
+
+      /* 只有两个点时补一段直线，避免整条轨迹不出现 */
+      if (n === 2) {
+        var q0 = pts[0], q1 = pts[1];
+        if (Math.abs(q1.x - q0.x) > CONFIG.jump || Math.abs(q1.y - q0.y) > CONFIG.jump) return;
+        var age2 = (now - q0.t) / CONFIG.life;
+        if (age2 < 0 || age2 > 1) return;
+        var k2 = Math.pow(1 - age2, 1.6);
+        ctx.beginPath();
+        ctx.moveTo(q0.x, q0.y);
+        ctx.lineTo(q1.x, q1.y);
+        setStroke(k2, q0.v, glow);
+        ctx.stroke();
+        return;
+      }
+
+      for (var i = 1; i < n - 1; i++) {
+        var p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
+        if (Math.abs(p1.x - p0.x) > CONFIG.jump || Math.abs(p1.y - p0.y) > CONFIG.jump) continue;
+        if (Math.abs(p2.x - p1.x) > CONFIG.jump || Math.abs(p2.y - p1.y) > CONFIG.jump) continue;
+
+        var age = (now - p1.t) / CONFIG.life;
+        if (age < 0 || age > 1) continue;
+
+        var k = Math.pow(1 - age, 1.6);
+        if (k < 0.02) continue;
+
+        ctx.beginPath();
+        ctx.moveTo((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+        ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+        setStroke(k, p1.v, glow);
+        ctx.stroke();
+      }
+    }
+
+    function setStroke(k, v, glow) {
+      var sp = Math.min(1, v / CONFIG.speedRef);
+      var base = CONFIG.widthMax - (CONFIG.widthMax - CONFIG.widthMin) * sp;
+      var wd = base * k;
+      var a = CONFIG.alpha * k;
+      if (glow) { wd *= 4.6; a *= 0.15; }
+      ctx.lineWidth = Math.max(wd, 0.2);
+      ctx.strokeStyle = 'rgba(' + rgb + ',' + a.toFixed(3) + ')';
+    }
+
+    function drawHead(now) {
+      if (!pts.length) return;
+      var p = pts[pts.length - 1];
+      var age = (now - p.t) / CONFIG.life;
+      if (age < 0 || age > 1) return;
+      var k = Math.pow(1 - age, 1.3);
+      var sp = Math.min(1, p.v / CONFIG.speedRef);
+      var r = (CONFIG.widthMax - (CONFIG.widthMax - CONFIG.widthMin) * sp) * 0.55 * k;
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(' + rgb + ',' + (CONFIG.alpha * k).toFixed(3) + ')';
+      ctx.arc(p.x, p.y, Math.max(r, 0.5), 0, 6.2832);
+      ctx.fill();
+    }
+
+    function drawSparks() {
+      for (var i = 0; i < sparks.length; i++) {
+        var s = sparks[i];
+        var k = 1 - s.age / s.life;
+        var a = CONFIG.sparkAlpha * k * k;
+        if (a < 0.004) continue;
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(' + rgb + ',' + a.toFixed(3) + ')';
+        ctx.arc(s.x, s.y, Math.max(s.r * k, 0.3), 0, 6.2832);
+        ctx.fill();
+      }
+    }
+
+    function draw(now) {
+      ctx.clearRect(0, 0, w, h);
+      if (!pts.length && !sparks.length) return;
+
+      ctx.globalCompositeOperation = dark ? 'lighter' : 'multiply';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (CONFIG.glow) strokeLayer(now, true);
+      strokeLayer(now, false);
+      drawHead(now);
+      drawSparks();
+
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    /* ---------- 主循环 ---------- */
+
+    function frame(ts) {
+      if (!running) return;
+      var dt = Math.min((ts - prevTime) / 1000, 0.05);
+      prevTime = ts;
+      updateSparks(dt);
+      prune(ts);
+      draw(ts);
+      if (pts.length || sparks.length) {
+        rafId = requestAnimationFrame(frame);
+      } else {
+        running = false;
+        rafId = 0;
+      }
+    }
+
+    function ensureLoop() {
+      if (running) return;
+      running = true;
+      prevTime = performance.now();
+      rafId = requestAnimationFrame(frame);
+    }
+
+    /* ---------- 事件 ---------- */
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+
+    window.addEventListener('pointerdown', function (e) {
+      started = false;
+      onMove(e);
+      ensureLoop();
+    }, { passive: true });
+
+    window.addEventListener('resize', function () {
+      if (resizeRaf) return;
+      resizeRaf = requestAnimationFrame(function () {
+        resizeRaf = 0;
+        resize();
+      });
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        running = false;
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+        pts.length = 0;
+        sparks.length = 0;
+        started = false;
+      } else {
+        ensureLoop();
+      }
+    });
+
+    if (window.MutationObserver) {
+      new MutationObserver(readTheme).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme']
+      });
+    }
+    var scheme = window.matchMedia('(prefers-color-scheme: dark)');
+    if (scheme.addEventListener) scheme.addEventListener('change', readTheme);
+
+    /* ---------- 启动 ---------- */
+
+    resize();
+    readTheme();
+
+    window.__cursorTrail = {
+      refresh: readTheme,
+      clear: function () { pts.length = 0; sparks.length = 0; draw(performance.now()); }
+    };
   })();
 </script>
 
