@@ -1,0 +1,14 @@
+# 这份文件只影响「上传到 Worker 静态资源」的内容，不影响仓库本身。
+# 语法与 .gitignore 相同：每行一个模式，从站点根目录算起。
+
+# 仓库内部文件，不该被公开访问
+README.md
+wrangler.jsonc
+.gitattributes
+.gitignore
+.assetsignore
+
+# 编辑器与系统垃圾
+.DS_Store
+Thumbs.db
+*.log
