@@ -1,0 +1,12 @@
+{
+  // Worker 名字必须与面板里的项目名完全一致，否则会新建一个 Worker 而不是更新现有的
+  "name": "kamsedtop",
+  "compatibility_date": "2026-11-24",
+  "assets": {
+    // 仓库根目录就是站点根目录
+    "directory": "./",
+    // 关键项：未知路径返回 404.html，而不是默认的空 404
+    // 可选值 none | 404-page | single-page-application
+    "not_found_handling": "404-page"
+  }
+}
