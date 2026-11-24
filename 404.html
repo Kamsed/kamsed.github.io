@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/x-icon" href="/icon.ico">
+<title>没有这个页面</title>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="googlebot" content="noindex, nofollow, noarchive">
+<!-- 404 会被挂在任意错误的路径下，所以这里的资源都走绝对路径 -->
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 400 clamp(20px, 5vw, 30px)/1.5 -apple-system, BlinkMacSystemFont,
+          "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  main {
+    text-align: center;
+    user-select: none;
+  }
+
+  .line {
+    margin: 0;
+    letter-spacing: .04em;
+  }
+
+  .face {
+    margin: .5em 0 0;
+    font-size: .8em;
+    letter-spacing: .1em;
+    color: var(--muted);
+  }
+
+  .back {
+    display: inline-block;
+    margin-top: 2.4em;
+    padding: 7px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    text-decoration: none;
+    transition: color .2s, border-color .2s;
+  }
+
+  .back:hover { color: var(--fg); border-color: var(--muted); }
+  .back:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="line">这页也没有</p>
+  <p class="face" aria-hidden="true">╮（╯＿╰）╭</p>
+  <a class="back" href="/" aria-label="回到首页">← 回去</a>
+</main>
+</body>
+</html>

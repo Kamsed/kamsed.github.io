@@ -1,0 +1,51 @@
+/* ------------------------------------------------------------------
+   全站主题：颜色只在这里定义一次
+   页面在 <html> 上挂 data-theme="auto|light|dark" 即可
+   auto = 跟随系统
+   ------------------------------------------------------------------ */
+
+:root {
+  --bg: #fbfbfa;
+  --fg: #18181a;
+  --muted: #6b6b6e;
+  --line: #e2e2de;
+  --surface: #ffffff;
+  --hover-shadow: rgba(0, 0, 0, .05);
+  --trail-rgb: 16, 185, 129;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --bg: #0e0e10;
+  --fg: #ededeb;
+  --muted: #96969a;
+  --line: #26262a;
+  --surface: #161618;
+  --hover-shadow: rgba(255, 255, 255, .06);
+  --trail-rgb: 110, 231, 183;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] {
+    --bg: #0e0e10;
+    --fg: #ededeb;
+    --muted: #96969a;
+    --line: #26262a;
+    --surface: #161618;
+    --hover-shadow: rgba(255, 255, 255, .06);
+    --trail-rgb: 110, 231, 183;
+    color-scheme: dark;
+  }
+}
+
+/* 切换主题时的过渡，两个页面共用一个手感 */
+html,
+body {
+  transition: background-color .35s ease, color .35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body { transition: none; }
+}

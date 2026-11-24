@@ -1,0 +1,12 @@
+# Cloudflare Pages 专用：这个文件名必须是 _headers，不能带 .txt
+# 作用比页面里的 meta 更广——JSON、图片、错误页这些没法写 meta 的资源也能盖住
+#
+# 站里没有 robots.txt，是有意为之：
+#   1) 文件不存在时爬虫视为「无限制」，与写满 Allow 等价；
+#   2) Cloudflare 开了 Bot Preference Sync，它会自行前置生成 robots.txt，
+#      仓库里再写一份反而可能与之冲突（同组里 Allow: / 会抵消掉前置的 Disallow）；
+#   3) 真正拦住收录的是这里的 X-Robots-Tag 和每页的 meta robots，
+#      两者都要求爬虫能读到页面——所以绝不能把整站 Disallow 掉。
+
+/*
+  X-Robots-Tag: noindex, nofollow, noarchive

@@ -3,53 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/x-icon" href="icon.ico">
 <title>kamsed</title>
-<meta name="robots" content="noindex, nofollow">
-<meta name="googlebot" content="noindex, nofollow">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="googlebot" content="noindex, nofollow, noarchive">
 
-<script>
-  // 在首屏渲染前恢复主题，避免闪烁
-  (function () {
-    var t = localStorage.getItem('theme');
-    if (t === 'light' || t === 'dark' || t === 'auto') {
-      document.documentElement.dataset.theme = t;
-    }
-  })();
-</script>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 
 <style>
-  :root {
-    --bg: #fbfbfa;
-    --fg: #18181a;
-    --muted: #6b6b6e;
-    --line: #e2e2de;
-    --btn-bg: #ffffff;
-    --trail-rgb: 16, 185, 129;
-    color-scheme: light;
-  }
-
-  html[data-theme="dark"] {
-    --bg: #0e0e10;
-    --fg: #ededeb;
-    --muted: #96969a;
-    --line: #26262a;
-    --btn-bg: #161618;
-    --trail-rgb: 110, 231, 183;
-    color-scheme: dark;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    html[data-theme="auto"] {
-      --bg: #0e0e10;
-      --fg: #ededeb;
-      --muted: #96969a;
-      --line: #26262a;
-      --btn-bg: #161618;
-      --trail-rgb: 110, 231, 183;
-      color-scheme: dark;
-    }
-  }
-
   * { box-sizing: border-box; }
 
   /* 光标拖尾层：铺满视口，只负责显示，不接管任何指针事件 */
@@ -82,11 +44,6 @@
   main {
     position: relative;
     z-index: 1;
-  }
-
-  main p {
-    margin: 0;
-    letter-spacing: .02em;
     text-align: center;
     animation: fade .8s ease both;
   }
@@ -95,6 +52,59 @@
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: none; }
   }
+
+  /* ---------- 散字文字 ---------- */
+
+  .scatter {
+    margin: 0;
+    display: inline-flex;
+    align-items: baseline;
+    gap: .18em;                 /* 字间距，与参考图一致留有呼吸感 */
+    letter-spacing: .04em;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;   /* iOS 长按不弹「拷贝/查询」，免得盖住解锁入口 */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    padding: .25em .5em;        /* 放大点击热区，不改变视觉位置 */
+    margin: -.25em -.5em;
+    border-radius: 10px;
+  }
+
+  .scatter:focus-visible {
+    outline: 2px solid var(--fg);
+    outline-offset: 4px;
+  }
+
+  .scatter .ch {
+    display: inline-block;
+    transform-origin: 50% 60%;
+    will-change: transform, opacity, filter;
+    backface-visibility: hidden;
+  }
+
+  /* 开始散开后，文字不再可点，避免连点打断 */
+  .scatter.is-busy { cursor: default; pointer-events: none; }
+
+  /* 两句文案叠在同一格，互换时不产生位移 */
+  .stage {
+    display: grid;
+    place-items: center;
+  }
+
+  .stage > * { grid-area: 1 / 1; }
+
+  /* 第二幕那句默认不可见，也不吃事件 */
+  .line-b {
+    visibility: hidden;
+    pointer-events: none;
+    cursor: default;
+    gap: 0;                 /* 颜文字要连成一体，去掉字距 */
+    letter-spacing: 0;
+  }
+
+  .line-b.is-on { visibility: visible; }
 
   .theme-toggle {
     position: fixed;
@@ -105,7 +115,7 @@
     font-size: 13px;
     line-height: 1.6;
     color: var(--muted);
-    background: var(--btn-bg);
+    background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 999px;
     cursor: pointer;
@@ -123,7 +133,7 @@
     font-size: 13px;
     line-height: 1.6;
     color: var(--muted);
-    background: var(--btn-bg);
+    background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 999px;
     text-decoration: none;
@@ -133,9 +143,23 @@
   .guide-link:hover { color: var(--fg); border-color: var(--muted); }
   .guide-link:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 
+  /* 入口默认藏着：长按文字解锁后才挂上来 */
+  .guide-link[hidden] { display: none; }
+
+  .guide-link.is-revealed { animation: reveal .7s cubic-bezier(.2,.8,.25,1) both; }
+
+  @keyframes reveal {
+    from { opacity: 0; transform: translateY(-8px) scale(.96); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* 凌晨（0–5 点）：光标拖尾换冷色，配合夜里那句台词 */
+  html[data-night="1"] { --trail-rgb: 120, 156, 255; }
+
   @media (prefers-reduced-motion: reduce) {
     body { transition: none; }
-    main p { animation: none; }
+    main { animation: none; }
+    .guide-link.is-revealed { animation: none; }
     #cursor-trail { display: none; }
   }
 </style>
@@ -144,36 +168,362 @@
 
 <canvas id="cursor-trail" aria-hidden="true"></canvas>
 
-<a class="guide-link" href="quote/index.html" aria-label="前往摘抄页面">摘抄</a>
+<a class="guide-link" id="guide" href="quote/index.html" aria-label="前往摘抄页面" hidden>摘抄</a>
 
 <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切换颜色主题">自动</button>
 
 <main>
-  <p>这里什么都没有</p>
+  <div class="stage" id="stage">
+    <p class="scatter" id="line-a" role="button" tabindex="0"
+       aria-label="点击开始：文字散开，换一句，再聚回来">
+      <span class="ch">这</span><span class="ch">里</span><span class="ch">什</span><span class="ch">么</span><span class="ch">都</span><span class="ch">没</span><span class="ch">有</span>
+    </p>
+    <p class="scatter line-b" id="line-b" aria-hidden="true">
+      <span class="ch">╮</span><span class="ch">（</span><span class="ch">╯</span><span class="ch">＿</span><span class="ch">╰</span><span class="ch">）</span><span class="ch">╭</span>
+    </p>
+  </div>
 </main>
 
 <script>
+  /* ------------------------------------------------------------------
+     摘抄入口：藏在文字里
+     - 入口默认不渲染，长按文字 900ms 解锁
+     - 长按后抬手那一次 click 会被吞掉，不会顺带触发散字
+     - 解锁状态写 localStorage，此后一直显示
+     - 键盘兜底：任意位置连续敲 quote 也能解锁
+  ------------------------------------------------------------------ */
   (function () {
-    var root = document.documentElement;
-    var btn = document.getElementById('theme-toggle');
-    var modes = ['auto', 'light', 'dark'];
-    var labels = { auto: '自动', light: '🔆', dark: '🌙' };
+    var HOLD = 900;
+    var KEY = 'quote-unlocked';
 
-    function apply(mode) {
-      root.dataset.theme = mode;
-      btn.textContent = labels[mode];
-      btn.setAttribute('aria-label', '切换颜色主题，当前：' + labels[mode]);
-      localStorage.setItem('theme', mode);
+    var word = document.getElementById('line-a');
+    var link = document.getElementById('guide');
+    if (!word || !link) return;
+
+    var unlocked = false;
+    try { unlocked = localStorage.getItem(KEY) === '1'; } catch (e) {}
+
+    function reveal() {
+      if (!link.hidden) return;
+      link.hidden = false;
+      link.classList.add('is-revealed');
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+      /* 文字轻微一沉，给个「按到了」的反馈 */
+      try {
+        word.animate(
+          [{ transform: 'none' }, { transform: 'scale(.985)' }, { transform: 'none' }],
+          { duration: 280, easing: 'ease-out' }
+        );
+      } catch (e) {}
     }
 
-    var current = root.dataset.theme;
-    if (modes.indexOf(current) === -1) current = 'auto';
-    apply(current);
+    if (unlocked) link.hidden = false;
 
-    btn.addEventListener('click', function () {
-      var next = modes[(modes.indexOf(root.dataset.theme) + 1) % modes.length];
-      apply(next);
+    var timer = 0, holding = false, armed = false;
+
+    function stopHold() {
+      holding = false;
+      window.clearTimeout(timer);
+    }
+
+    word.addEventListener('pointerdown', function () {
+      armed = false;              /* 清掉上一次可能残留的吞点击标记 */
+      holding = true;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(function () {
+        if (!holding) return;
+        holding = false;
+        armed = true;             /* 抬手产生的那次 click 要吞掉 */
+        reveal();
+      }, HOLD);
     });
+
+    word.addEventListener('pointerup', stopHold);
+    word.addEventListener('pointercancel', stopHold);
+    word.addEventListener('pointerleave', stopHold);
+    window.addEventListener('blur', stopHold);
+
+    /* 捕获阶段拦截，散字脚本的 click 收不到 */
+    word.addEventListener('click', function (e) {
+      if (!armed) return;
+      armed = false;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }, true);
+
+    /* 键盘兜底 */
+    var buf = '';
+    document.addEventListener('keydown', function (e) {
+      if (!e.key || e.key.length !== 1) return;
+      buf = (buf + e.key.toLowerCase()).slice(-5);
+      if (buf === 'quote') reveal();
+    });
+  })();
+</script>
+
+<script>
+  /* ------------------------------------------------------------------
+     两幕散字动画 + 来访记忆
+     点击后依次：
+     1) 第一句散开：每字随机方向、距离、旋转、时长，位移同时淡出并模糊
+     2) 随机静默后，原位置淡入第二句（一张颜文字）
+     3) 停留 2 秒，再淡出
+     4) 第一句从第 1 步的散开位置聚拢回原位
+     台词与颜文字按来访情况成对切换（见 SCENES）：
+     首次 / 熟客 / 久别 / 凌晨，各一组
+     - 记下每字散开的终态，聚拢从同一状态起步，是「收回来」而不是重新出现
+     - 逐字用 Web Animations API 控制，整个流程可随时 clear 打断
+     - prefers-reduced-motion 时只做淡入淡出，不做位移
+     - 流程进行中忽略点击，避免状态错乱
+  ------------------------------------------------------------------ */
+  (function () {
+    var a = document.getElementById('line-a');
+    var b = document.getElementById('line-b');
+    if (!a || !b) return;
+
+    /* ---- 台词表：一句话配一张脸，按来访情况选一组 ---- */
+    var SCENES = {
+      first: { line: '这里什么都没有', face: '╮（╯＿╰）╭' },
+      again: { line: '又来了',        face: '(￣▽￣)"' },
+      long:  { line: '好久不见',      face: 'o(￣▽￣)ｄ' },
+      night: { line: '该睡了',        face: '(_　_)。゜zｚＺ' }
+    };
+
+    /* ---- 来访记录：同一天只记一次，隔 14 天算久别 ---- */
+    function stamp(ts) {
+      var d = new Date(ts);
+      return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+    }
+
+    var KEY = 'visits';
+    var rec = { count: 0, last: 0 };
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) rec = JSON.parse(raw) || rec;
+    } catch (e) {}
+
+    var now = Date.now();
+    var gapDays = rec.last ? Math.floor((now - rec.last) / 86400000) : -1;
+    var sameDay = rec.last ? stamp(rec.last) === stamp(now) : false;
+    var count = sameDay ? (rec.count || 1) : (rec.count || 0) + 1;
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ count: count, last: now }));
+    } catch (e) {}
+
+    var hour = new Date().getHours();
+
+    /* 优先级：久别 > 首次 > 凌晨 > 又来了
+       首次永远给站点原话，「该睡了」留给回头客 */
+    function pickScene() {
+      if (gapDays >= 14) return 'long';
+      if (count <= 1) return 'first';
+      if (hour >= 0 && hour < 5) return 'night';
+      if (count >= 4) return 'again';
+      return 'first';
+    }
+
+    var A = [], B = [];
+
+    /* ---- 按场景重造逐字 span，返回该行的字符节点 ---- */
+    function build(el, str) {
+      var frag = document.createDocumentFragment();
+      var cs = Array.from(str);
+      for (var i = 0; i < cs.length; i++) {
+        var s = document.createElement('span');
+        s.className = 'ch';
+        s.textContent = cs[i];
+        frag.appendChild(s);
+      }
+      el.textContent = '';
+      el.appendChild(frag);
+      return Array.prototype.slice.call(el.querySelectorAll('.ch'));
+    }
+
+    var sceneKey = pickScene();
+    var scene = SCENES[sceneKey];
+    A = build(a, scene.line);
+    B = build(b, scene.face);
+    a.setAttribute('aria-label', scene.line + '，点击开始');
+
+    /* 凌晨把拖尾换成冷色，跟选到哪一句无关 */
+    if (hour >= 0 && hour < 5) document.documentElement.dataset.night = '1';
+
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var busy = false;
+    var timers = [];
+    var acts = [];
+    var out = [];             /* 每个字散开后的终态 { dx, dy, rot } */
+
+    var HOLD = 2000;          /* 第二句停留时长（毫秒） */
+
+    function rnd(x, y) { return x + Math.random() * (y - x); }
+    function px(v) { return v.toFixed(1) + 'px'; }
+
+    function later(ms, fn) { timers.push(window.setTimeout(fn, ms)); }
+
+    function clearTimers() {
+      for (var i = 0; i < timers.length; i++) window.clearTimeout(timers[i]);
+      timers.length = 0;
+    }
+
+    function cancelAll() {
+      for (var i = 0; i < acts.length; i++) {
+        try { acts[i].cancel(); } catch (e) {}
+      }
+      acts.length = 0;
+    }
+
+    function play(el, frames, dur, delay, easing) {
+      acts.push(el.animate(frames, {
+        duration: dur,
+        delay: delay,
+        easing: easing,
+        fill: 'both'
+      }));
+      return dur + delay;
+    }
+
+    function setBusy(v) {
+      busy = v;
+      a.classList.toggle('is-busy', v);
+      a.setAttribute('aria-busy', v ? 'true' : 'false');
+    }
+
+    /* ---- 第一幕：散开消失 ---- */
+    function scatterAway() {
+      var longest = 0;
+      out = [];
+      for (var i = 0; i < A.length; i++) {
+        var side = i < A.length / 2 ? -1 : 1;
+        var reach = 40 + Math.abs(i - (A.length - 1) / 2) * 28;   /* 越靠边飞得越远 */
+        var dx = side * rnd(reach * 0.8, reach * 1.8) + rnd(-12, 12);
+        var dy = rnd(-90, 90);
+        var rot = rnd(-28, 28) * side;
+        out.push({ dx: dx, dy: dy, rot: rot });
+
+        var dur = reduce.matches ? 300 : rnd(620, 880);
+        var delay = reduce.matches ? 0 : rnd(0, 150);
+        var frames = reduce.matches ? [
+          { opacity: 1 }, { opacity: 0 }
+        ] : [
+          { offset: 0,    transform: 'none', opacity: 1, filter: 'blur(0px)' },
+          { offset: 0.55, transform: 'translate3d(' + px(dx * .5) + ',' + px(dy * .5) +
+                                    ',0) rotate(' + (rot * .5).toFixed(1) + 'deg)',
+                          opacity: .5, filter: 'blur(.6px)' },
+          { offset: 1,    transform: 'translate3d(' + px(dx) + ',' + px(dy) + ',0) rotate(' +
+                                    rot.toFixed(1) + 'deg) scale(.86)', opacity: 0, filter: 'blur(3px)' }
+        ];
+        longest = Math.max(longest, play(A[i], frames, dur, delay,
+          reduce.matches ? 'linear' : 'cubic-bezier(.22,.72,.28,1)'));
+      }
+      return longest;
+    }
+
+    /* ---- 第二幕：淡入「真的什么都没有」 ---- */
+    function showB() {
+      b.classList.add('is-on');
+      var longest = 0;
+      for (var i = 0; i < B.length; i++) {
+        var dur = reduce.matches ? 220 : rnd(380, 520);
+        var delay = reduce.matches ? 0 : i * 40;
+        var frames = reduce.matches ? [
+          { opacity: 0 }, { opacity: 1 }
+        ] : [
+          { transform: 'translate3d(0,' + px(rnd(6, 14)) + ',0) scale(.94)', opacity: 0, filter: 'blur(5px)' },
+          { transform: 'none', opacity: 1, filter: 'blur(0px)' }
+        ];
+        longest = Math.max(longest, play(B[i], frames, dur, delay, 'cubic-bezier(.2,.8,.25,1)'));
+      }
+      return longest;
+    }
+
+    /* ---- 第二幕收尾：淡出 ---- */
+    function hideB() {
+      var longest = 0;
+      for (var i = 0; i < B.length; i++) {
+        var dur = reduce.matches ? 160 : rnd(220, 300);
+        var delay = reduce.matches ? 0 : rnd(0, 60);
+        var frames = reduce.matches ? [
+          { opacity: 1 }, { opacity: 0 }
+        ] : [
+          { transform: 'none', opacity: 1, filter: 'blur(0px)' },
+          { transform: 'translate3d(0,' + px(rnd(-10, -4)) + ',0)', opacity: 0, filter: 'blur(4px)' }
+        ];
+        longest = Math.max(longest, play(B[i], frames, dur, delay, 'cubic-bezier(.4,0,.7,.4)'));
+      }
+      return longest;
+    }
+
+    /* ---- 第三幕：从散开的位置聚拢回原位 ---- */
+    function gatherA() {
+      var longest = 0;
+      for (var i = 0; i < A.length; i++) {
+        var o = out[i] || { dx: 0, dy: 0, rot: 0 };
+        var dur = reduce.matches ? 280 : rnd(480, 660);
+        var delay = reduce.matches ? 0 : i * 30;
+        var frames = reduce.matches ? [
+          { opacity: 0 }, { opacity: 1 }
+        ] : [
+          { transform: 'translate3d(' + px(o.dx) + ',' + px(o.dy) + ',0) rotate(' +
+                       o.rot.toFixed(1) + 'deg) scale(.86)', opacity: 0, filter: 'blur(3px)' },
+          { transform: 'none', opacity: 1, filter: 'blur(0px)' }
+        ];
+        longest = Math.max(longest, play(A[i], frames, dur, delay, 'cubic-bezier(.16,.84,.3,1)'));
+      }
+      return longest;
+    }
+
+    function reset() {
+      clearTimers();
+      cancelAll();
+      b.classList.remove('is-on');
+      setBusy(false);
+    }
+
+    function run() {
+      if (busy) return;
+      reset();                 /* 从干净状态起跑 */
+      setBusy(true);
+
+      var t1 = scatterAway();
+
+      /* 散开完 → 随机静默 → 第二句淡入 */
+      later(t1 + (reduce.matches ? 200 : rnd(240, 500)), function () {
+        var t2 = showB();
+
+        /* 淡入完 → 停留 2 秒 → 淡出 */
+        later(t2 + HOLD, function () {
+          var t3 = hideB();
+
+          /* 淡出完 → 原句从散开状态聚拢 */
+          later(t3 + 80, function () {
+            b.classList.remove('is-on');
+            var t4 = gatherA();
+
+            later(t4 + 60, function () {
+              cancelAll();     /* 清掉 fill:both，回到无内联样式 */
+              setBusy(false);
+            });
+          });
+        });
+      });
+    }
+
+    a.addEventListener('click', run);
+
+    a.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        run();
+      }
+    });
+
+    /* 切到后台再回来时把状态清干净，避免停在半路 */
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) reset();
+    });
+
+    window.__scatter = { run: run, reset: reset };
   })();
 </script>
 
